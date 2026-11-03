@@ -12,44 +12,35 @@ banques = [
     {"societes_noms":"Banque Populaire Aquitaine Centre Atlantique", "siren":"755501590"},{"societes_noms": "Banque Populaire Grand Ouest", "siren":"857500227"}]
 
 #On construit une fonction pour localiser le produit net bancaire
-def extraire_pnb(data, champ):
-    """
-    Cherche la première occurrence de "produit net bancaire" suivie de
-    chiffres dans les enregistrements de l'API.
-    Retourne {"n": ..., "n-1": ...} ou None si rien n'est trouvé.
-    data : le JSON renvoyé par l'API (r.json())
-    champ : nom du champ qui contient le texte du bilan
-    """
-    for record in data["results"]:
-        texte = str(record.get(champ, ""))
-        pos = texte.lower().find("produit net bancaire")
-        if pos == -1:
-            continue # pas de PNB dans cet enregistrement
-            
-# On prend un extrait après "produit net bancaire" et on le découpe en mots
-    mots = texte[pos:pos + 300].replace("\xa0", " ").split()
-    nombres = []
-    courant = ""
-    for mot in mots:
+def extraire_pnb(data,champ):
+  for record in data["results"]:
+    if "Comptes annuels" not in str(record.get("facette_categorie_libelle", "")):
+        continue #On ne regarde que les comptes annuels
+
+    texte = " ".join(str(record.get(champ, "")).split())
+    pos = texte.lower().find("produit net bancaire")
+    if pos == 1:
+        continue
+
+    mots = texte[pos:pos + 300].split()
+
+    chiffres = []
+    for mot in mots[3:]:
         if mot.isdigit():
-            # un groupe de 3 chiffres qui suit un nombre = suite du même nombre
-            # (ex. "1 234 567" -> "1", "234", "567")
-            if courant and len(mot) == 3:
-                courant += mot
-            else:
-                if courant:
-                        nombres.append(int(courant))
-                        courant = mot
+            chiffres.append(mot)
         else:
-            if courant:
-                nombres.append(int(courant))
-            courant = ""
-    if courant:
-        nombres.append(int(courant))
-        
-    if len(nombres) >= 2:
-            return {"n": nombres[0], "n-1": nombres[1]}
-    return None
+            break
+
+    if len(chiffres) >= 2 and len(chiffres) % 2 == 0:
+        moitie = len(chiffres) // 2
+        return {
+            "n": int("".join(chiffres[:moitie])),
+            "n-1": int("".join(chiffres[moitie:])),
+            "date": record.get("dateparution"),
+        }
+  return None
+
+print(extraire_pnb(data,"ftcontent"))
 
 #Exemple :
 import requests
